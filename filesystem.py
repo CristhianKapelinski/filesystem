@@ -44,6 +44,28 @@ class SistemaArquivos:
                 livres = 0
         return None
 
+    def mostrar_memoria(self):
+        """Exibe o estado atual da memória (disco) com detalhes sobre a ocupação de cada bloco."""
+        print("Estado atual do disco virtual:")
+        print("Legenda: [  ] = Livre | Nome do Arquivo = Ocupado\n")
+        
+        # Criação de um mapa dos blocos ocupados
+        mapa_blocos = ["  " for _ in range(self.tamanho_disco)]
+        for arquivo in self.diretorio_atual.arquivos.values():
+            for bloco in arquivo.blocos:
+                # Nome abreviado para exibição
+                nome_abreviado = arquivo.nome[:2] if len(arquivo.nome) > 2 else arquivo.nome
+                mapa_blocos[bloco] = nome_abreviado
+        
+        # Mostra os blocos em uma grade de 10 por linha
+        linhas = [
+            "".join(f"[{mapa_blocos[i]}]" for i in range(j, min(j + 10, self.tamanho_disco)))
+            for j in range(0, self.tamanho_disco, 10)
+        ]
+        for linha in linhas:
+            print(linha)
+        print("-" * 40)
+
     def mkdir(self, nome):
         """Cria um novo diretório."""
         if nome in self.diretorio_atual.subdiretorios:
@@ -60,8 +82,14 @@ class SistemaArquivos:
             return
         blocos = self.encontrar_blocos_livres(tamanho)
         if not blocos:
-            print(f"Erro: Espaço insuficiente para criar o arquivo '{nome}'.")
-            self.log.append(f"Comando: create {nome} {tamanho}\n- Erro: Espaço insuficiente")
+            espaco_livre = sum(1 for bloco in self.disco if not bloco.ocupado)
+            if espaco_livre >= tamanho:
+                print(f"Erro: Espaço insuficiente devido à fragmentação para criar o arquivo '{nome}'.")
+                self.log.append(f"Comando: create {nome} {tamanho}\n- Erro: Fragmentação externa (espaço livre: {espaco_livre} blocos, requerido: {tamanho}).")
+            else:
+                print(f"Erro: Espaço insuficiente para criar o arquivo '{nome}'.")
+                self.log.append(f"Comando: create {nome} {tamanho}\n- Erro: Espaço insuficiente (espaço livre: {espaco_livre} blocos, requerido: {tamanho}).")
+            self.mostrar_memoria()
             return
         for bloco in blocos:
             self.disco[bloco].ocupado = True
@@ -69,6 +97,7 @@ class SistemaArquivos:
         self.diretorio_atual.arquivos[nome] = novo_arquivo
         self.log.append(f"Comando: create {nome} {tamanho}\n- Arquivo criado: {nome}\n- Blocos alocados: {blocos}")
         print(f"Arquivo '{nome}' criado com sucesso.")
+        self.mostrar_memoria()
 
     def cd(self, nome):
         """Navega para um diretório."""
@@ -109,6 +138,7 @@ class SistemaArquivos:
             print(f"Diretório '{nome}' excluído com sucesso.")
         else:
             print(f"Erro: '{nome}' não encontrado.")
+        self.mostrar_memoria()
     
     def info(self):
         """Exibe informações do sistema de arquivos."""
@@ -118,6 +148,7 @@ class SistemaArquivos:
         print(f"Espaço usado: {espaco_usado} blocos")
         print(f"Espaço livre: {espaco_livre} blocos")
         self.log.append(f"Comando: info\n- Tamanho: {self.tamanho_disco}\n- Usado: {espaco_usado}\n- Livre: {espaco_livre}")
+        self.mostrar_memoria()
 
     def write(self, nome, dados):
         """Escreve dados em um arquivo."""
@@ -151,6 +182,10 @@ def interface_linha_de_comando():
         comando = input(f"{sistema.caminho_atual}> ").strip()
         if comando == "exit":
             print("Encerrando o simulador. Até logo!")
+            file = open("log.txt", "w")
+            for linha in sistema.log:
+                file.write(linha + "\n")
+            file.close()
             break
         
         args = comando.split()
