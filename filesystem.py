@@ -1,11 +1,9 @@
 class Bloco:
-    """Representa um bloco no disco virtual."""
     def __init__(self):
         self.ocupado = False
         self.conteudo = None
 
 class Arquivo:
-    """Representa um arquivo no sistema de arquivos."""
     def __init__(self, nome, tamanho, blocos):
         self.nome = nome
         self.tamanho = tamanho
@@ -13,14 +11,12 @@ class Arquivo:
         self.conteudo = ""
 
 class Diretorio:
-    """Representa um diretório no sistema de arquivos."""
     def __init__(self, nome):
         self.nome = nome
         self.subdiretorios = {}
         self.arquivos = {}
 
 class SistemaArquivos:
-    """Simula um sistema de arquivos com alocação contígua."""
     def __init__(self, tamanho_disco):
         self.tamanho_disco = tamanho_disco
         self.disco = [Bloco() for _ in range(tamanho_disco)]
@@ -30,7 +26,6 @@ class SistemaArquivos:
         self.log = []
 
     def encontrar_blocos_livres(self, tamanho):
-        """Encontra uma sequência de blocos livres para alocação contígua."""
         livres = 0
         inicio = -1
         for i in range(self.tamanho_disco):
@@ -48,26 +43,16 @@ class SistemaArquivos:
         """Exibe o estado atual da memória (disco) com detalhes sobre a ocupação de cada bloco."""
         print("Estado atual do disco virtual:")
         print("Legenda: [  ] = Livre | Nome do Arquivo = Ocupado\n")
-        
-        # Criação de um mapa dos blocos ocupados
-        mapa_blocos = ["  " for _ in range(self.tamanho_disco)]
-        for arquivo in self.diretorio_atual.arquivos.values():
-            for bloco in arquivo.blocos:
-                # Nome abreviado para exibição
-                nome_abreviado = arquivo.nome[:2] if len(arquivo.nome) > 2 else arquivo.nome
-                mapa_blocos[bloco] = nome_abreviado
-        
-        # Mostra os blocos em uma grade de 10 por linha
         linhas = [
-            "".join(f"[{mapa_blocos[i]}]" for i in range(j, min(j + 10, self.tamanho_disco)))
+            "".join(f"[{bloco.conteudo or '  '}]" for bloco in self.disco[j:j+10])
             for j in range(0, self.tamanho_disco, 10)
         ]
         for linha in linhas:
             print(linha)
         print("-" * 40)
 
+
     def mkdir(self, nome):
-        """Cria um novo diretório."""
         if nome in self.diretorio_atual.subdiretorios:
             print(f"Erro: Diretório '{nome}' já existe.")
             return
@@ -91,32 +76,48 @@ class SistemaArquivos:
                 self.log.append(f"Comando: create {nome} {tamanho}\n- Erro: Espaço insuficiente (espaço livre: {espaco_livre} blocos, requerido: {tamanho}).")
             self.mostrar_memoria()
             return
+        
+        nome_abreviado = nome[:2] if len(nome) > 2 else nome
+
         for bloco in blocos:
             self.disco[bloco].ocupado = True
+            self.disco[bloco].conteudo = nome_abreviado
+        
         novo_arquivo = Arquivo(nome, tamanho, blocos)
         self.diretorio_atual.arquivos[nome] = novo_arquivo
         self.log.append(f"Comando: create {nome} {tamanho}\n- Arquivo criado: {nome}\n- Blocos alocados: {blocos}")
         print(f"Arquivo '{nome}' criado com sucesso.")
         self.mostrar_memoria()
 
+
     def cd(self, nome):
-        """Navega para um diretório."""
+        """Navega para um diretório especificado no caminho."""
         if nome == "..":
-            # Volta ao diretório raiz (simplificado para este caso)
-            if self.diretorio_atual.nome != "/":
+            if self.diretorio_atual != self.raiz:
                 self.diretorio_atual = self.raiz
                 self.caminho_atual = "/"
             print("Navegando para o diretório raiz.")
-        elif nome in self.diretorio_atual.subdiretorios:
-            self.diretorio_atual = self.diretorio_atual.subdiretorios[nome]
-            self.caminho_atual += f"{nome}/"
-            print(f"Navegando para o diretório '{nome}'.")
         else:
-            print(f"Erro: Diretório '{nome}' não encontrado.")
+            partes = nome.split("/")
+            diretorio_temp = self.diretorio_atual
+            caminho_temp = self.caminho_atual.rstrip("/")
+            
+            for parte in partes:
+                if parte in diretorio_temp.subdiretorios:
+                    diretorio_temp = diretorio_temp.subdiretorios[parte]
+                    caminho_temp += f"/{parte}"
+                else:
+                    print(f"Erro: Diretório '{parte}' não encontrado.")
+                    self.log.append(f"Comando: cd {nome}\n- Erro: Diretório '{parte}' não encontrado.")
+                    return
+            self.diretorio_atual = diretorio_temp
+            self.caminho_atual = caminho_temp + "/"
+            print(f"Navegando para o diretório '{nome}'.")
+        
         self.log.append(f"Comando: cd {nome}")
 
+
     def ls(self):
-        """Lista o conteúdo do diretório atual."""
         print("Conteúdo do diretório atual:")
         for subdir in self.diretorio_atual.subdiretorios:
             print(f"[DIR] {subdir}")
@@ -130,6 +131,7 @@ class SistemaArquivos:
             arquivo = self.diretorio_atual.arquivos.pop(nome)
             for bloco in arquivo.blocos:
                 self.disco[bloco].ocupado = False
+                self.disco[bloco].conteudo = None 
             self.log.append(f"Comando: delete {nome}\n- Arquivo '{nome}' excluído\n- Blocos liberados: {arquivo.blocos}")
             print(f"Arquivo '{nome}' excluído com sucesso.")
         elif nome in self.diretorio_atual.subdiretorios:
@@ -139,9 +141,9 @@ class SistemaArquivos:
         else:
             print(f"Erro: '{nome}' não encontrado.")
         self.mostrar_memoria()
+
     
     def info(self):
-        """Exibe informações do sistema de arquivos."""
         espaco_usado = sum(1 for bloco in self.disco if bloco.ocupado)
         espaco_livre = self.tamanho_disco - espaco_usado
         print(f"Tamanho total do disco: {self.tamanho_disco} blocos")
@@ -151,7 +153,6 @@ class SistemaArquivos:
         self.mostrar_memoria()
 
     def write(self, nome, dados):
-        """Escreve dados em um arquivo."""
         if nome not in self.diretorio_atual.arquivos:
             print(f"Erro: Arquivo '{nome}' não encontrado.")
             return
@@ -161,7 +162,6 @@ class SistemaArquivos:
         print(f"Dados escritos no arquivo '{nome}'.")
 
     def read(self, nome):
-        """Lê dados de um arquivo."""
         if nome not in self.diretorio_atual.arquivos:
             print(f"Erro: Arquivo '{nome}' não encontrado.")
             return
@@ -170,9 +170,20 @@ class SistemaArquivos:
         self.log.append(f"Comando: read {nome}")
 
 
-# Loop interativo para comandos do usuário
+    def mostrar_arvore(self, diretorio=None, nivel=0):
+        """Exibe a árvore de diretórios e arquivos a partir do diretório especificado."""
+        if diretorio is None:
+            diretorio = self.raiz 
+        indentacao = "  " * nivel 
+        print(f"{indentacao}[DIR] {diretorio.nome}") 
+        for arquivo in diretorio.arquivos.values():
+            print(f"{indentacao}  [FILE] {arquivo.nome}")
+        for subdir in diretorio.subdiretorios.values():
+            self.mostrar_arvore(subdir, nivel + 1)
+ 
+
 def interface_linha_de_comando():
-    tamanho_disco = 100  # Tamanho do disco virtual em blocos
+    tamanho_disco = 100 
     sistema = SistemaArquivos(tamanho_disco)
 
     print("Bem-vindo ao Simulador de Sistema de Arquivos!")
@@ -181,7 +192,7 @@ def interface_linha_de_comando():
     while True:
         comando = input(f"{sistema.caminho_atual}> ").strip()
         if comando == "exit":
-            print("Encerrando o simulador. Até logo!")
+            print("Simulação Encerrada!")
             file = open("log.txt", "w")
             for linha in sistema.log:
                 file.write(linha + "\n")
@@ -211,8 +222,8 @@ def interface_linha_de_comando():
             sistema.write(args[1], " ".join(args[2:]))
         elif cmd == "read" and len(args) > 1:
             sistema.read(args[1])
+        elif cmd == "tree":
+            sistema.mostrar_arvore()
         else:
             print("Comando desconhecido ou argumentos insuficientes.")
-
-# Inicia a interface de linha de comando
 interface_linha_de_comando()
